@@ -249,7 +249,7 @@ func (a *Agent) Run(ctx context.Context) {
 					if err == io.EOF {
 						return
 					} else if err != nil {
-						fmt.Println(err.Error())
+						log.Errorf(color.RedString("Error receiving data from server: %s", err.Error()))
 						return
 					}
 
@@ -267,7 +267,7 @@ func (a *Agent) Run(ctx context.Context) {
 							break
 						}
 
-						fmt.Println(color.YellowString("Connection closed: %s => %s", v.Raddr.String(), v.Laddr.String()))
+						log.Debugf(color.YellowString("Connection closed: %s => %s", v.Raddr.String(), v.Laddr.String()))
 
 						conn.Close()
 					}
