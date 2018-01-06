@@ -241,10 +241,12 @@ func (a *Agent) Run(ctx context.Context) {
 					}
 				}()
 
+				// always cancel
+				defer rwcancel()
+
 				for {
 					o, err := cc.receive()
 					if err == io.EOF {
-						rwcancel()
 						return
 					} else if err != nil {
 						fmt.Println(err.Error())
