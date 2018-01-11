@@ -1,6 +1,7 @@
 package server
 
 import (
+	"context"
 	"io"
 	"net"
 )
@@ -32,6 +33,9 @@ func (c *conn) serve() {
 	// TODO: add inactivity timeout
 	defer c.Close()
 
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+
 	c.agent.in <- Hello{
 		Token: c.agent.token,
 		Laddr: c.LocalAddr(),
@@ -39,37 +43,39 @@ func (c *conn) serve() {
 	}
 
 	go func() {
-		for buf := range c.out {
-			_, err := c.Write(buf)
-			if err == io.EOF {
-				return
-			} else if err != nil {
-				log.Error(err.Error())
-				break
-			}
-		}
-	}()
-
-	func() {
-		buf := make([]byte, 32*1024)
-
 		for {
-			nr, er := c.Read(buf)
-			if er == io.EOF {
+			select {
+			case <-ctx.Done():
 				return
-			} else if er != nil {
-				log.Error(er.Error())
-				break
-			} else if nr == 0 {
-				continue
-			}
-
-			c.agent.in <- ReadWrite{
-				Laddr:   c.LocalAddr(),
-				Raddr:   c.RemoteAddr(),
-				Payload: buf[:nr],
+			case buf := <-c.out:
+				_, err := c.Write(buf)
+				if err == io.EOF {
+					return
+				} else if err != nil {
+					log.Errorf("Error writing to connection: %s", err.Error())
+					return
+				}
 			}
 		}
-
 	}()
+
+	buf := make([]byte, 32*1024)
+
+	for {
+		nr, er := c.Read(buf)
+		if er == io.EOF {
+			return
+		} else if er != nil {
+			log.Errorf("Error reading from connection: ", er.Error())
+			return
+		} else if nr == 0 {
+			continue
+		}
+
+		c.agent.in <- ReadWrite{
+			Laddr:   c.LocalAddr(),
+			Raddr:   c.RemoteAddr(),
+			Payload: buf[:nr],
+		}
+	}
 }

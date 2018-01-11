@@ -46,30 +46,7 @@ import (
 
 var log = logging.MustGetLogger("agent")
 
-type Config struct {
-}
-
-type Connections []*conn
-
-func (c Connections) Get(laddr net.Addr, raddr net.Addr) *conn {
-	for _, conn := range c {
-		if conn.LocalAddr().String() != laddr.String() {
-			continue
-		}
-
-		if conn.RemoteAddr().String() != raddr.String() {
-			continue
-		}
-
-		return conn
-	}
-
-	return nil
-}
-
 type Agent struct {
-	config *Config
-
 	in chan encoding.BinaryMarshaler
 
 	conns Connections
@@ -92,7 +69,7 @@ func New(options ...OptionFn) (*Agent, error) {
 	return h, nil
 }
 
-func (a *Agent) newConn(rw net.Conn) (c *conn, err error) {
+func (a *Agent) newConn(rw net.Conn) (c *conn) {
 	c = &conn{
 		Conn:  rw,
 		host:  "",
@@ -100,9 +77,8 @@ func (a *Agent) newConn(rw net.Conn) (c *conn, err error) {
 		out:   make(chan []byte),
 	}
 
-	a.conns = append(a.conns, c)
-
-	return c, nil
+	a.conns.Add(c)
+	return c
 }
 
 func (a *Agent) serv(l net.Listener) error {
@@ -116,12 +92,9 @@ func (a *Agent) serv(l net.Listener) error {
 			break
 		}
 
-		fmt.Println(color.YellowString("Accepting connection from %s => %s", rw.RemoteAddr().String(), rw.LocalAddr().String()))
+		log.Info(color.YellowString("Accepting connection from %s => %s", rw.RemoteAddr().String(), rw.LocalAddr().String()))
 
-		c, err := a.newConn(rw)
-		if err != nil {
-			continue
-		}
+		c := a.newConn(rw)
 
 		go c.serve()
 	}
@@ -157,7 +130,7 @@ func (a *Agent) Run(ctx context.Context) {
 			a.in = make(chan encoding.BinaryMarshaler)
 
 			func() {
-				fmt.Println(color.YellowString("Connecting to Honeytrap... "))
+				log.Info(color.YellowString("Connecting to Honeytrap... "))
 
 				// configure the Disco connection
 				clientConfig := libdisco.Config{
@@ -175,13 +148,15 @@ func (a *Agent) Run(ctx context.Context) {
 
 				defer cc.Close()
 
-				fmt.Println(color.YellowString("Connected to Honeytrap."))
+				log.Info(color.YellowString("Connected to Honeytrap."))
 
 				defer func() {
-					fmt.Println(color.YellowString("Honeytrap disconnected."))
+					log.Info(color.YellowString("Honeytrap disconnected."))
 				}()
 
-				cc.send(Handshake{})
+				cc.send(Handshake{
+				// Version: Version,
+				})
 
 				o, err := cc.receive()
 				if err != nil {
@@ -207,7 +182,7 @@ func (a *Agent) Run(ctx context.Context) {
 					if _, ok := address.(*net.TCPAddr); ok {
 						l, err := net.Listen(address.Network(), address.String())
 						if err != nil {
-							fmt.Println(color.RedString("Error starting listener: %s", err.Error()))
+							log.Errorf(color.RedString("Error starting listener: %s", err.Error()))
 							continue
 						}
 

@@ -44,6 +44,7 @@ const (
 )
 
 type Handshake struct {
+	Version string
 }
 
 func (r *Handshake) UnmarshalBinary(data []byte) error {
