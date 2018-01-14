@@ -31,16 +31,18 @@ func (c *conn) Close() {
 
 func (c *conn) serve() {
 	// TODO: add inactivity timeout
-	defer c.Close()
-
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
+
+	defer c.Close()
 
 	c.agent.in <- Hello{
 		Token: c.agent.token,
 		Laddr: c.LocalAddr(),
 		Raddr: c.RemoteAddr(),
 	}
+
+	defer log.Infof("Connection closed")
 
 	go func() {
 		for {
@@ -68,8 +70,6 @@ func (c *conn) serve() {
 		} else if er != nil {
 			log.Errorf("Error reading from connection: ", er.Error())
 			return
-		} else if nr == 0 {
-			continue
 		}
 
 		c.agent.in <- ReadWrite{

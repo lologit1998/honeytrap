@@ -199,6 +199,14 @@ func (a *Agent) Run(ctx context.Context) {
 
 				// Create a context for closing the following goroutines
 				rwctx, rwcancel := context.WithCancel(context.Background())
+
+				// always cancel
+				defer func() {
+					log.Debug("CARNCEL")
+					rwcancel()
+
+				}()
+
 				go func() {
 					for {
 						select {
@@ -215,9 +223,6 @@ func (a *Agent) Run(ctx context.Context) {
 						}
 					}
 				}()
-
-				// always cancel
-				defer rwcancel()
 
 				for {
 					o, err := cc.receive()
@@ -242,6 +247,7 @@ func (a *Agent) Run(ctx context.Context) {
 							break
 						}
 
+						a.conns.Delete(conn)
 						log.Debugf(color.YellowString("Connection closed: %s => %s", v.Raddr.String(), v.Laddr.String()))
 
 						conn.Close()
