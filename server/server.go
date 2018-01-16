@@ -146,7 +146,9 @@ func (a *Agent) Run(ctx context.Context) {
 
 				cc := &agentConnection{conn}
 
-				defer cc.Close()
+				defer func() {
+					cc.Close()
+				}()
 
 				log.Info(color.YellowString("Connected to Honeytrap."))
 
@@ -200,57 +202,64 @@ func (a *Agent) Run(ctx context.Context) {
 				// Create a context for closing the following goroutines
 				rwctx, rwcancel := context.WithCancel(context.Background())
 
-				// always cancel
-				defer func() {
-					log.Debug("CARNCEL")
-					rwcancel()
-
-				}()
-
 				go func() {
+					// always cancel
+					defer func() {
+						rwcancel()
+					}()
+
 					for {
-						select {
-						case <-rwctx.Done():
+						o, err := cc.receive()
+						if err == io.EOF {
 							return
-						case <-time.After(time.Second * 5):
-							cc.send(Ping{})
-						case data, ok := <-a.in:
-							if !ok {
+						} else if err != nil {
+							log.Errorf(color.RedString("Error receiving data from server: %s", err.Error()))
+							return
+						}
+
+						switch v := o.(type) {
+						case *ReadWrite:
+							conn := a.conns.Get(v.Laddr, v.Raddr)
+							if conn == nil {
 								break
 							}
 
-							cc.send(data)
+							conn.out <- v.Payload
+						case *EOF:
+							conn := a.conns.Get(v.Laddr, v.Raddr)
+							if conn == nil {
+								break
+							}
+
+							a.conns.Delete(conn)
+
+							log.Debugf(color.YellowString("Connection closed: %s => %s", v.Raddr.String(), v.Laddr.String()))
+
+							conn.Close()
 						}
 					}
 				}()
 
 				for {
-					o, err := cc.receive()
-					if err == io.EOF {
+					select {
+					case <-rwctx.Done():
 						return
-					} else if err != nil {
-						log.Errorf(color.RedString("Error receiving data from server: %s", err.Error()))
-						return
-					}
-
-					switch v := o.(type) {
-					case *ReadWrite:
-						conn := a.conns.Get(v.Laddr, v.Raddr)
-						if conn == nil {
+					case <-time.After(time.Second * 5):
+						if err := cc.send(Ping{}); err != nil {
+							log.Error("Error sending ping: %s", err.Error())
+							rwcancel()
+							return
+						}
+					case data, ok := <-a.in:
+						if !ok {
 							break
 						}
 
-						conn.out <- v.Payload
-					case *EOF:
-						conn := a.conns.Get(v.Laddr, v.Raddr)
-						if conn == nil {
-							break
+						if err := cc.send(data); err != nil {
+							log.Error("Error sending command: %s", err.Error())
+							return
 						}
 
-						a.conns.Delete(conn)
-						log.Debugf(color.YellowString("Connection closed: %s => %s", v.Raddr.String(), v.Laddr.String()))
-
-						conn.Close()
 					}
 				}
 			}()
