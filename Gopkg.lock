@@ -8,12 +8,6 @@
   revision = "5df930a27be2502f99b292b7cc09ebad4d0891f4"
 
 [[projects]]
-  branch = "master"
-  name = "github.com/honeytrap/honeytrap-agent"
-  packages = ["cmd","server"]
-  revision = "310fa483c20290c262e564241c334faadb7f7a00"
-
-[[projects]]
   name = "github.com/mattn/go-colorable"
   packages = ["."]
   revision = "167de6bfdfba052fa6b2d3664c8f5272e23c9072"
@@ -35,7 +29,7 @@
   branch = "master"
   name = "github.com/mimoo/disco"
   packages = ["libdisco"]
-  revision = "911dedbad3878426881579e4d2d6c4169981089c"
+  revision = "15dd4b8476c9fa493b19fb83b07f4ac19f67a993"
 
 [[projects]]
   branch = "master"
@@ -70,6 +64,6 @@
 [solve-meta]
   analyzer-name = "dep"
   analyzer-version = 1
-  inputs-digest = "255886ba59c71aa03aea9aae40b54c175aa6177968dd8cbb4eed5e4ea0b1d0a3"
+  inputs-digest = "9a233f9881c66b89c0db0d994d8e6922ac73c62eee98858d66948f788f470bbc"
   solver-name = "gps-cdcl"
   solver-version = 1
