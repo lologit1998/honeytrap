@@ -2,6 +2,12 @@
 
 
 [[projects]]
+  name = "github.com/BurntSushi/toml"
+  packages = ["."]
+  revision = "b26d9c308763d68093482582cea63d69be07a0f0"
+  version = "v0.3.0"
+
+[[projects]]
   branch = "master"
   name = "github.com/fatih/color"
   packages = ["."]
@@ -64,6 +70,6 @@
 [solve-meta]
   analyzer-name = "dep"
   analyzer-version = 1
-  inputs-digest = "9a233f9881c66b89c0db0d994d8e6922ac73c62eee98858d66948f788f470bbc"
+  inputs-digest = "e4ea85a7a1aea1d37b83040e011093cd49225881e9b35d86005db8a32f7d83d2"
   solver-name = "gps-cdcl"
   solver-version = 1

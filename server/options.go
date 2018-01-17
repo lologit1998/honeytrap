@@ -46,20 +46,6 @@ import (
 
 type OptionFn func(*Agent) error
 
-func WithConfig(s string) (OptionFn, error) {
-	data, err := ioutil.ReadFile(s)
-	if err != nil {
-		return nil, err
-	}
-
-	_ = data
-
-	return func(b *Agent) error {
-		return nil
-		// return b.config.Load(bytes.NewBuffer(data))
-	}, nil
-}
-
 func HomeDir() string {
 	var err error
 	var usr *user.User

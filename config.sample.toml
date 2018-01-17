@@ -1,0 +1,2 @@
+server: server-name-or-ip:1337
+remote-key: token
