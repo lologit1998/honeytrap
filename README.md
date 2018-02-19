@@ -1,8 +1,8 @@
-# Honeytrap Agent [![Gitter](https://badges.gitter.im/Join%20Chat.svg)](https://gitter.im/honeytrap/honeytrap-agent?utm_source=badge&utm_medium=badge&utm_campaign=&utm_campaign=pr-badge&utm_content=badge) [![Go Report Card](https://goreportcard.com/badge/honeytrap/honeytrap-agent)](https://goreportcard.com/report/honeytrap/honeytrap-agent) [![Build Status](https://travis-ci.org/honeytrap/honeytrap-agent.svg?branch=master)](https://travis-ci.org/honeytrap/honeytrap-agent) [![codecov](https://codecov.io/gh/honeytrap/honeytrap-agent/branch/master/graph/badge.svg)](https://codecov.io/gh/honeytrap/honeytrap-agent)
+<img src="http://docs.honeytrap.io/images/logo.png" height="110" />
 
-----
-Honeytrap Agent will forward traffic to Honeytrap
-----
+# Honeytrap Agent [![Gitter](https://badges.gitter.im/Join%20Chat.svg)](https://gitter.im/honeytrap/honeytrap?utm_source=badge&utm_medium=badge&utm_campaign=&utm_campaign=pr-badge&utm_content=badge) [![Go Report Card](https://goreportcard.com/badge/honeytrap/honeytrap-agent)](https://goreportcard.com/report/honeytrap/honeytrap-agent) [![Build Status](https://travis-ci.org/honeytrap/honeytrap-agent.svg?branch=master)](https://travis-ci.org/honeytrap/honeytrap-agent) [![codecov](https://codecov.io/gh/honeytrap/honeytrap-agent/branch/master/graph/badge.svg)](https://codecov.io/gh/honeytrap/honeytrap-agent)
+
+### Honeytrap Agent will forward traffic to Honeytrap
 
 ## To start using Honeytrap Agent
 
