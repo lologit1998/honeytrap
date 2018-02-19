@@ -181,23 +181,6 @@ func (a *Agent) Run(ctx context.Context) {
 				}
 
 				listeners := []net.Listener{}
-				defer func() {
-					fmt.Println("Closing listeners")
-
-					a.conns.Each(func(ac *conn) {
-						// non blocking
-						select {
-						case ac.close <- struct{}{}:
-						default:
-						}
-					})
-					fmt.Println("Closing listeners1")
-
-					for _, l := range listeners {
-						l.Close()
-					}
-					fmt.Println("Closing listeners2")
-				}()
 
 				// we know what ports to listen to
 				for _, address := range hr.Addresses {
@@ -222,9 +205,26 @@ func (a *Agent) Run(ctx context.Context) {
 				rwctx, rwcancel := context.WithCancel(context.Background())
 				defer func() {
 					rwcancel()
-					for _ = range a.in {
-						// drain
+
+					go func() {
+						for _ = range a.in {
+							// drain
+						}
+					}()
+
+					a.conns.Each(func(ac *conn) {
+						// non blocking
+						select {
+						case ac.close <- struct{}{}:
+						default:
+						}
+					})
+
+					for _, l := range listeners {
+						l.Close()
 					}
+
+					close(a.in)
 				}()
 
 				go func() {

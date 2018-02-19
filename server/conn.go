@@ -29,7 +29,6 @@ type conn struct {
 func (c *conn) Close() {
 	// don't have to mutex, closing all in same goroutine
 	if c.closed {
-		log.Errorf("Closing already closed conn")
 		return
 	}
 
@@ -74,6 +73,8 @@ func (c *conn) serve() {
 	}()
 
 	go func() {
+		defer c.Close()
+
 		for {
 			select {
 			case <-ctx.Done():
