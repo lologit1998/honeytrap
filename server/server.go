@@ -36,6 +36,7 @@ import (
 	"fmt"
 	"io"
 	"net"
+	"sync/atomic"
 	"time"
 
 	"github.com/fatih/color"
@@ -52,6 +53,8 @@ type Agent struct {
 	conns Connections
 
 	token string
+
+	count uint32
 
 	Server    string
 	RemoteKey []byte
@@ -70,11 +73,15 @@ func New(options ...OptionFn) (*Agent, error) {
 }
 
 func (a *Agent) newConn(rw net.Conn) (c *conn) {
+	defer atomic.AddUint32(&a.count, 1)
+
 	c = &conn{
 		Conn:  rw,
 		host:  "",
 		agent: a,
+		id:    atomic.LoadUint32(&a.count),
 		out:   make(chan []byte),
+		close: make(chan struct{}),
 	}
 
 	a.conns.Add(c)
@@ -82,10 +89,13 @@ func (a *Agent) newConn(rw net.Conn) (c *conn) {
 }
 
 func (a *Agent) serv(l net.Listener) error {
-	defer l.Close()
+	defer func() {
+		defer l.Close()
+
+		log.Error("Listener closed")
+	}()
 
 	for {
-		// TODO: Actually, should only accept if client connection has been built.
 		rw, err := l.Accept()
 		if err != nil {
 			log.Errorf("Error while accepting connection: %s", err.Error())
@@ -138,26 +148,24 @@ func (a *Agent) Run(ctx context.Context) {
 					RemoteKey:        a.RemoteKey,
 				}
 
-				conn, err := libdisco.Dial("tcp", a.Server, &clientConfig)
+				dc, err := libdisco.Dial("tcp", a.Server, &clientConfig)
 				if err != nil {
 					log.Errorf("Error connecting to server: %s: %s", a.Server, err.Error())
 					return
 				}
 
-				cc := &agentConnection{conn}
-
-				defer func() {
-					cc.Close()
-				}()
+				cc := &agentConnection{dc}
 
 				log.Info(color.YellowString("Connected to Honeytrap."))
 
 				defer func() {
+					cc.Close()
+
 					log.Info(color.YellowString("Honeytrap disconnected."))
 				}()
 
 				cc.send(Handshake{
-				// Version: Version,
+					Version: Version,
 				})
 
 				o, err := cc.receive()
@@ -174,9 +182,21 @@ func (a *Agent) Run(ctx context.Context) {
 
 				listeners := []net.Listener{}
 				defer func() {
+					fmt.Println("Closing listeners")
+
+					a.conns.Each(func(ac *conn) {
+						// non blocking
+						select {
+						case ac.close <- struct{}{}:
+						default:
+						}
+					})
+					fmt.Println("Closing listeners1")
+
 					for _, l := range listeners {
 						l.Close()
 					}
+					fmt.Println("Closing listeners2")
 				}()
 
 				// we know what ports to listen to
@@ -199,69 +219,79 @@ func (a *Agent) Run(ctx context.Context) {
 					}
 				}
 
-				// Create a context for closing the following goroutines
 				rwctx, rwcancel := context.WithCancel(context.Background())
+				defer func() {
+					rwcancel()
+					for _ = range a.in {
+						// drain
+					}
+				}()
 
 				go func() {
-					// always cancel
-					defer func() {
-						rwcancel()
-					}()
+					defer cc.Close()
+
+					counter := 0
 
 					for {
-						o, err := cc.receive()
-						if err == io.EOF {
+						select {
+						case <-rwctx.Done():
 							return
-						} else if err != nil {
-							log.Errorf(color.RedString("Error receiving data from server: %s", err.Error()))
-							return
-						}
-
-						switch v := o.(type) {
-						case *ReadWrite:
-							conn := a.conns.Get(v.Laddr, v.Raddr)
-							if conn == nil {
-								break
+						case <-time.After(time.Second * 5):
+							if err := cc.send(Ping{}); err != nil {
+								return
+							}
+						case data, ok := <-a.in:
+							if !ok {
+								return
 							}
 
-							conn.out <- v.Payload
-						case *EOF:
-							conn := a.conns.Get(v.Laddr, v.Raddr)
-							if conn == nil {
-								break
+							if err := cc.send(data); err != nil {
+								return
 							}
-
-							a.conns.Delete(conn)
-
-							log.Debugf(color.YellowString("Connection closed: %s => %s", v.Raddr.String(), v.Laddr.String()))
-
-							conn.Close()
 						}
+
+						counter++
 					}
 				}()
 
 				for {
-					select {
-					case <-rwctx.Done():
+					o, err := cc.receive()
+					if err == io.EOF {
 						return
-					case <-time.After(time.Second * 5):
-						if err := cc.send(Ping{}); err != nil {
-							log.Error("Error sending ping: %s", err.Error())
-							rwcancel()
-							return
-						}
-					case data, ok := <-a.in:
-						if !ok {
-							break
+					} else if err != nil {
+						log.Errorf(color.RedString("Error receiving data from server: %s", err.Error()))
+						return
+					}
+
+					switch v := o.(type) {
+					case *ReadWrite:
+						conn := a.conns.Get(v.Laddr, v.Raddr)
+						if conn == nil {
+							continue
 						}
 
-						if err := cc.send(data); err != nil {
-							log.Error("Error sending command: %s", err.Error())
-							return
+						if conn.closed {
+							continue
 						}
 
+						conn.out <- v.Payload
+					case *EOF:
+						conn := a.conns.Get(v.Laddr, v.Raddr)
+						if conn == nil {
+							continue
+						}
+
+						select {
+						case conn.close <- struct{}{}:
+						default:
+						}
+
+						a.conns.Delete(conn)
+					default:
+						// unknown
 					}
 				}
+
 			}()
 
 			time.Sleep(time.Second * 2)

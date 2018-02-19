@@ -4,6 +4,7 @@ import (
 	"context"
 	"io"
 	"net"
+	"runtime"
 )
 
 const (
@@ -14,27 +15,39 @@ const (
 type conn struct {
 	net.Conn
 
+	id uint32
+
 	out  chan []byte
 	host string
 
 	agent *Agent
+
+	close  chan struct{}
+	closed bool
 }
 
 func (c *conn) Close() {
-	c.agent.in <- EOF{
-		Laddr: c.LocalAddr(),
-		Raddr: c.RemoteAddr(),
+	// don't have to mutex, closing all in same goroutine
+	if c.closed {
+		log.Errorf("Closing already closed conn")
+		return
 	}
 
+	close(c.out)
 	c.Conn.Close()
+
+	c.closed = true
 }
 
 func (c *conn) serve() {
-	// TODO: add inactivity timeout
-	ctx, cancel := context.WithCancel(context.Background())
-	defer cancel()
-
-	defer c.Close()
+	defer func() {
+		if err := recover(); err != nil {
+			trace := make([]byte, 1024)
+			count := runtime.Stack(trace, true)
+			log.Errorf("Error: %s\nStack of %d bytes: %s\n", err, count, string(trace))
+			return
+		}
+	}()
 
 	c.agent.in <- Hello{
 		Token: c.agent.token,
@@ -42,33 +55,49 @@ func (c *conn) serve() {
 		Raddr: c.RemoteAddr(),
 	}
 
-	defer log.Infof("Connection closed")
+	ctx, cancel := context.WithCancel(context.Background())
+
+	defer func() {
+		cancel()
+
+		go func() {
+			for _ = range c.out {
+			}
+		}()
+
+		c.agent.in <- EOF{
+			Laddr: c.LocalAddr(),
+			Raddr: c.RemoteAddr(),
+		}
+
+		c.Close()
+	}()
 
 	go func() {
 		for {
 			select {
 			case <-ctx.Done():
 				return
+			case <-c.close:
+				return
 			case buf := <-c.out:
 				_, err := c.Write(buf)
 				if err == io.EOF {
 					return
 				} else if err != nil {
-					log.Errorf("Error writing to connection: %s", err.Error())
 					return
 				}
 			}
 		}
 	}()
 
-	buf := make([]byte, 32*1024)
+	buf := make([]byte, 64*1024)
 
 	for {
 		nr, er := c.Read(buf)
 		if er == io.EOF {
 			return
 		} else if er != nil {
-			log.Errorf("Error reading from connection: ", er.Error())
 			return
 		}
 
@@ -78,4 +107,5 @@ func (c *conn) serve() {
 			Payload: buf[:nr],
 		}
 	}
+
 }
