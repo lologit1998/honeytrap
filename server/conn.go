@@ -68,8 +68,6 @@ func (c *conn) serve() {
 			Laddr: c.LocalAddr(),
 			Raddr: c.RemoteAddr(),
 		}
-
-		c.Close()
 	}()
 
 	go func() {
