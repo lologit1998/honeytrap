@@ -44,19 +44,29 @@ const (
 )
 
 type Handshake struct {
+	ProtocolVersion int
+
+	CommitID      string
+	ShortCommitID string
+
 	Version string
 }
 
 func (r *Handshake) UnmarshalBinary(data []byte) error {
 	d := NewDecoder(data)
-
-	_ = d
-
+	r.ProtocolVersion = d.ReadUint16()
+	r.Version = d.String()
+	r.ShortCommitID = d.String()
+	r.CommitID = d.String()
 	return nil
 }
 
 func (h Handshake) MarshalBinary() ([]byte, error) {
 	e := Encoder{}
+	e.WriteUint16(h.ProtocolVersion)
+	e.WriteString(h.Version)
+	e.WriteString(h.ShortCommitID)
+	e.WriteString(h.CommitID)
 	return e.Bytes(), nil
 }
 

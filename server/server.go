@@ -165,7 +165,10 @@ func (a *Agent) Run(ctx context.Context) {
 				}()
 
 				cc.send(Handshake{
-					Version: Version,
+					ProtocolVersion: 0x1,
+					Version:         Version,
+					ShortCommitID:   ShortCommitID,
+					CommitID:        CommitID,
 				})
 
 				o, err := cc.receive()
