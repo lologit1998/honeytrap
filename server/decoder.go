@@ -113,11 +113,25 @@ func (d *Decoder) ReadAddr() net.Addr {
 		return nil
 	}
 
-	ip := net.IP(d.ReadData())
+	proto := d.ReadUint8()
+
+	data := d.ReadData()
+	ip := net.IP(data)
+
 	port := d.ReadUint16()
 
-	return &net.TCPAddr{
-		IP:   ip,
-		Port: port,
+	if proto == 6 {
+		return &net.TCPAddr{
+			IP:   ip,
+			Port: port,
+		}
+	} else if proto == 17 {
+		return &net.UDPAddr{
+			IP:   ip,
+			Port: port,
+		}
+	} else {
+		// unsupported protocol
+		return nil
 	}
 }

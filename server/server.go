@@ -88,7 +88,7 @@ func (a *Agent) newConn(rw net.Conn) (c *conn) {
 	return c
 }
 
-func (a *Agent) serv(l net.Listener) error {
+func (a *Agent) servTCP(l net.Listener) error {
 	defer func() {
 		defer l.Close()
 
@@ -187,21 +187,28 @@ func (a *Agent) Run(ctx context.Context) {
 
 				// we know what ports to listen to
 				for _, address := range hr.Addresses {
-					if _, ok := address.(*net.TCPAddr); ok {
-						l, err := net.Listen(address.Network(), address.String())
+					if ta, ok := address.(*net.TCPAddr); ok {
+						l, err := net.ListenTCP(address.Network(), ta)
 						if err != nil {
 							log.Errorf(color.RedString("Error starting listener: %s", err.Error()))
 							continue
 						}
 
-						log.Infof("Listener started: %s", address)
+						log.Infof("Listener started: tcp/%s", address)
 
 						listeners = append(listeners, l)
 
-						go a.serv(l)
+						go a.servTCP(l)
 					} else if ua, ok := address.(*net.UDPAddr); ok {
-						_ = ua
-						log.Errorf("Not implemented yet")
+						l, err := net.ListenUDP(address.Network(), ua)
+						if err != nil {
+							log.Errorf(color.RedString("Error starting listener: %s", err.Error()))
+							continue
+						}
+
+						_ = l
+
+						log.Errorf("Listener not implemented: udp/%s", address)
 					}
 				}
 
