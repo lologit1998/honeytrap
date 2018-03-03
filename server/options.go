@@ -36,6 +36,7 @@ import (
 	"os"
 	"os/user"
 	"path"
+	"path/filepath"
 
 	_ "net/http/pprof"
 
@@ -92,24 +93,64 @@ func WithServer(server string) OptionFn {
 	}
 }
 
-func WithToken() OptionFn {
-	uid := xid.New().String()
-
-	p := HomeDir()
-	p = path.Join(p, "token")
-
-	if _, err := os.Stat(p); os.IsNotExist(err) {
-		ioutil.WriteFile(p, []byte(uid), 0600)
-	} else if err != nil {
-		// other error
-		panic(err)
-	} else if data, err := ioutil.ReadFile(p); err == nil {
-		uid = string(data)
-	} else {
-		panic(err)
+func expand(path string) (string, error) {
+	if len(path) == 0 || path[0] != '~' {
+		return path, nil
 	}
 
+	usr, err := user.Current()
+	if err != nil {
+		return "", err
+	}
+	return filepath.Join(usr.HomeDir, path[1:]), nil
+}
+
+func WithDataDir(s string) (OptionFn, error) {
+	var err error
+
+	p, err := expand(s)
+	if err != nil {
+		return nil, err
+	}
+
+	p, err = filepath.Abs(p)
+	_, err = os.Stat(p)
+
+	switch {
+	case err == nil:
+		break
+	case os.IsNotExist(err):
+		if err = os.Mkdir(p, 0755); err != nil {
+			return nil, err
+		}
+	default:
+		return nil, err
+	}
+
+	return func(b *Agent) error {
+		b.dataDir = p
+		return nil
+	}, nil
+}
+
+func WithToken() OptionFn {
 	return func(h *Agent) error {
+		uid := xid.New().String()
+
+		p := h.dataDir
+		p = path.Join(p, "token")
+
+		if _, err := os.Stat(p); os.IsNotExist(err) {
+			ioutil.WriteFile(p, []byte(uid), 0600)
+		} else if err != nil {
+			// other error
+			panic(err)
+		} else if data, err := ioutil.ReadFile(p); err == nil {
+			uid = string(data)
+		} else {
+			panic(err)
+		}
+
 		h.token = uid
 		return nil
 	}

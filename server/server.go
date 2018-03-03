@@ -56,6 +56,8 @@ type Agent struct {
 
 	count uint32
 
+	dataDir string
+
 	Server    string
 	RemoteKey []byte
 }

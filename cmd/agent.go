@@ -45,9 +45,7 @@ func init() {
 }
 
 func serve(c *cli.Context) error {
-	options := []server.OptionFn{
-		server.WithToken(),
-	}
+	options := []server.OptionFn{}
 
 	if v := c.GlobalString("server"); v != "" {
 		options = append(options, server.WithServer(v))
@@ -62,6 +60,16 @@ func serve(c *cli.Context) error {
 		ec := cli.NewExitError(fmt.Errorf(color.RedString("No remote key set.")), 1)
 		return ec
 	}
+
+	if d := c.String("data"); d == "" {
+	} else if fn, err := server.WithDataDir(d); err != nil {
+		ec := cli.NewExitError(err.Error(), 1)
+		return ec
+	} else {
+		options = append(options, fn)
+	}
+
+	options = append(options, server.WithToken())
 
 	srvr, err := server.New(
 		options...,
@@ -107,6 +115,7 @@ func loadConfig(c *cli.Context) error {
 	config := struct {
 		Server    string `toml:"server"`
 		RemoteKey string `toml:"remote-key"`
+		DataDir   string `toml:"data-dir"`
 	}{}
 
 	if _, err := toml.DecodeReader(r, &config); err != nil {
@@ -116,6 +125,7 @@ func loadConfig(c *cli.Context) error {
 
 	c.Set("server", config.Server)
 	c.Set("remote-key", config.RemoteKey)
+	c.Set("data", config.DataDir)
 
 	return nil
 }
@@ -152,6 +162,11 @@ Commit-ID: %s
 			Name:  "remote-key, k",
 			Value: "",
 			Usage: "remote key of server",
+		},
+		cli.StringFlag{
+			Name:  "data, d",
+			Value: "~/.honeytrap-agent",
+			Usage: "Store data in `DIR`",
 		},
 	}...)
 
