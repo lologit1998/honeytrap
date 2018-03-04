@@ -185,35 +185,6 @@ func (a *Agent) Run(ctx context.Context) {
 					return
 				}
 
-				listeners := []net.Listener{}
-
-				// we know what ports to listen to
-				for _, address := range hr.Addresses {
-					if ta, ok := address.(*net.TCPAddr); ok {
-						l, err := net.ListenTCP(address.Network(), ta)
-						if err != nil {
-							log.Errorf(color.RedString("Error starting listener: %s", err.Error()))
-							continue
-						}
-
-						log.Infof("Listener started: tcp/%s", address)
-
-						listeners = append(listeners, l)
-
-						go a.servTCP(l)
-					} else if ua, ok := address.(*net.UDPAddr); ok {
-						l, err := net.ListenUDP(address.Network(), ua)
-						if err != nil {
-							log.Errorf(color.RedString("Error starting listener: %s", err.Error()))
-							continue
-						}
-
-						_ = l
-
-						log.Errorf("Listener not implemented: udp/%s", address)
-					}
-				}
-
 				rwctx, rwcancel := context.WithCancel(context.Background())
 				defer func() {
 					rwcancel()
@@ -232,11 +203,43 @@ func (a *Agent) Run(ctx context.Context) {
 						}
 					})
 
-					for _, l := range listeners {
-						l.Close()
+					close(a.in)
+				}()
+
+				// we know what ports to listen to
+				for _, address := range hr.Addresses {
+					if ta, ok := address.(*net.TCPAddr); ok {
+						l, err := net.ListenTCP(address.Network(), ta)
+						if err != nil {
+							log.Errorf(color.RedString("Error starting listener: %s", err.Error()))
+							continue
+						}
+
+						log.Infof("Listener started: tcp/%s", address)
+
+						go func() {
+							<-rwctx.Done()
+							l.Close()
+						}()
+
+						go a.servTCP(l)
+					} else if ua, ok := address.(*net.UDPAddr); ok {
+						l, err := net.ListenUDP(address.Network(), ua)
+						if err != nil {
+							log.Errorf(color.RedString("Error starting listener: %s", err.Error()))
+							continue
+						}
+
+						_ = l
+
+						log.Errorf("Listener not implemented: udp/%s", address)
+					}
+				}
+
+
+
 					}
 
-					close(a.in)
 				}()
 
 				go func() {
