@@ -7,11 +7,6 @@ import (
 	"runtime"
 )
 
-const (
-	MessageTypeHello uint8 = 0x0
-	MessageTypePing        = 0x2
-)
-
 type conn struct {
 	net.Conn
 
