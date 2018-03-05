@@ -92,9 +92,7 @@ func (a *Agent) newConn(rw net.Conn) (c *conn) {
 
 func (a *Agent) servTCP(l net.Listener) error {
 	defer func() {
-		defer l.Close()
-
-		log.Error("Listener closed")
+		l.Close()
 	}()
 
 	for {
