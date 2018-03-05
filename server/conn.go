@@ -52,7 +52,6 @@ func (c *conn) serve() {
 	}()
 
 	c.agent.in <- Hello{
-		Token: c.agent.token,
 		Laddr: c.LocalAddr(),
 		Raddr: c.RemoteAddr(),
 	}

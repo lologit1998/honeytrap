@@ -52,6 +52,8 @@ type Agent struct {
 
 	conns Connections
 
+	uconns UDPConnections
+
 	token string
 
 	count uint32
@@ -112,6 +114,33 @@ func (a *Agent) servTCP(l net.Listener) error {
 	return nil
 }
 
+func (a *Agent) servUDP(c *net.UDPConn) error {
+	uconn := &udpConn{
+		c,
+		a,
+	}
+
+	a.uconns.Add(uconn)
+
+	for {
+		buff := make([]byte, 65535)
+
+		n, addr, err := c.ReadFromUDP(buff[:])
+		if err != nil {
+			log.Errorf("Error reading from udp/%s: %s", uconn.LocalAddr().String(), err.Error())
+			return err
+		}
+
+		a.in <- ReadWriteUDP{
+			Laddr:   uconn.LocalAddr(),
+			Raddr:   addr,
+			Payload: buff[:n],
+		}
+	}
+
+	return nil
+}
+
 func localIP() string {
 	addrs, err := net.InterfaceAddrs()
 	if err != nil {
@@ -138,6 +167,9 @@ func (a *Agent) Run(ctx context.Context) {
 	go func() {
 		for {
 			a.in = make(chan encoding.BinaryMarshaler)
+
+			a.conns = Connections{}
+			a.uconns = UDPConnections{}
 
 			func() {
 				log.Info(color.YellowString("Connecting to Honeytrap... "))
@@ -169,6 +201,7 @@ func (a *Agent) Run(ctx context.Context) {
 					Version:         Version,
 					ShortCommitID:   ShortCommitID,
 					CommitID:        CommitID,
+					Token:           a.token,
 				})
 
 				o, err := cc.receive()
@@ -222,22 +255,32 @@ func (a *Agent) Run(ctx context.Context) {
 
 						go a.servTCP(l)
 					} else if ua, ok := address.(*net.UDPAddr); ok {
-						l, err := net.ListenUDP(address.Network(), ua)
+						c, err := net.ListenUDP(address.Network(), ua)
 						if err != nil {
 							log.Errorf(color.RedString("Error starting listener: %s", err.Error()))
 							continue
+							//continue
 						}
 
-						_ = l
+						log.Infof("Listener started: udp/%s", address)
 
-						log.Errorf("Listener not implemented: udp/%s", address)
+						go func() {
+							<-rwctx.Done()
+							c.Close()
+						}()
+
+						go a.servUDP(c)
 					}
 				}
 
-
-
+				go func() {
+					select {
+					case <-ctx.Done():
+						rwcancel()
+						return
+					case <-rwctx.Done():
+						return
 					}
-
 				}()
 
 				go func() {
@@ -284,9 +327,13 @@ func (a *Agent) Run(ctx context.Context) {
 						}
 
 						conn.Send(v.Payload)
+					case *ReadWriteUDP:
+						conn := a.uconns.Get(v.Laddr)
+						if conn == nil {
 							continue
 						}
 
+						conn.WriteToUDP(v.Payload, v.Raddr.(*net.UDPAddr))
 					case *EOF:
 						conn := a.conns.Get(v.Laddr, v.Raddr)
 						if conn == nil {
@@ -308,7 +355,6 @@ func (a *Agent) Run(ctx context.Context) {
 
 			time.Sleep(time.Second * 2)
 		}
-
 	}()
 
 	<-ctx.Done()

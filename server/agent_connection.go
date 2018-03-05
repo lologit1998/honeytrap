@@ -34,8 +34,8 @@ import (
 	"encoding"
 	"encoding/binary"
 	"errors"
-	"net"
 	"fmt"
+	"net"
 )
 
 type agentConnection struct {
@@ -67,6 +67,8 @@ func (ac agentConnection) receive() (interface{}, error) {
 		o = &HandshakeResponse{}
 	case TypeReadWrite:
 		o = &ReadWrite{}
+	case TypeReadWriteUDP:
+		o = &ReadWriteUDP{}
 	case TypeEOF:
 		o = &EOF{}
 	}
@@ -109,6 +111,8 @@ func (ac agentConnection) send(o encoding.BinaryMarshaler) error {
 		ac.Conn.Write([]byte{uint8(TypeHandshakeResponse)})
 	case ReadWrite:
 		ac.Conn.Write([]byte{uint8(TypeReadWrite)})
+	case ReadWriteUDP:
+		ac.Conn.Write([]byte{uint8(TypeReadWriteUDP)})
 	case Ping:
 		ac.Conn.Write([]byte{uint8(TypePing)})
 	case EOF:

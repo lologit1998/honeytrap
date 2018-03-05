@@ -35,20 +35,20 @@ import (
 	"sync"
 )
 
-type Connections struct {
+type UDPConnections struct {
 	m sync.Mutex
 
-	conns []*conn
+	conns []*udpConn
 }
 
-func (c *Connections) Add(ac *conn) {
+func (c *UDPConnections) Add(ac *udpConn) {
 	c.m.Lock()
 	defer c.m.Unlock()
 
 	c.conns = append(c.conns, ac)
 }
 
-func (c *Connections) Each(fn func(ac *conn)) {
+func (c *UDPConnections) Each(fn func(ac *udpConn)) {
 	c.m.Lock()
 	defer c.m.Unlock()
 
@@ -57,7 +57,7 @@ func (c *Connections) Each(fn func(ac *conn)) {
 	}
 }
 
-func (c *Connections) Delete(ac *conn) {
+func (c *UDPConnections) Delete(ac *udpConn) {
 	c.m.Lock()
 	defer c.m.Unlock()
 
@@ -71,16 +71,12 @@ func (c *Connections) Delete(ac *conn) {
 	}
 }
 
-func (c *Connections) Get(laddr net.Addr, raddr net.Addr) *conn {
+func (c *UDPConnections) Get(laddr net.Addr) *udpConn {
 	c.m.Lock()
 	defer c.m.Unlock()
 
 	for _, conn := range c.conns {
 		if conn.LocalAddr().String() != laddr.String() {
-			continue
-		}
-
-		if conn.RemoteAddr().String() != raddr.String() {
 			continue
 		}
 
