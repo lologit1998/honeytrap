@@ -283,11 +283,10 @@ func (a *Agent) Run(ctx context.Context) {
 							continue
 						}
 
-						if conn.closed {
+						conn.Send(v.Payload)
 							continue
 						}
 
-						conn.out <- v.Payload
 					case *EOF:
 						conn := a.conns.Get(v.Laddr, v.Raddr)
 						if conn == nil {

@@ -38,6 +38,14 @@ func (c *conn) Close() {
 	c.closed = true
 }
 
+func (c *conn) Send(data []byte) {
+	if c.closed {
+		return
+	}
+
+	c.out <- data
+}
+
 func (c *conn) serve() {
 	defer func() {
 		if err := recover(); err != nil {
@@ -90,9 +98,9 @@ func (c *conn) serve() {
 		}
 	}()
 
-	buf := make([]byte, 64*1024)
-
 	for {
+		buf := make([]byte, 64*1024)
+
 		nr, er := c.Read(buf)
 		if er == io.EOF {
 			return
