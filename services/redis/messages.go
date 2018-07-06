@@ -206,6 +206,14 @@ func (s *redisService) infoKeyspaceMsg() string {
 `
 }
 
+func (s *redisService) pingDefaultMsg() string {
+	return `PONG`
+}
+
+func (s *redisService) pingSpecificMsg(word string) string {
+	return fmt.Sprintf("%v", word)
+}
+
 func lenMsg() string {
 	return "$%d\r\n%s\r\n"
 }
@@ -221,4 +229,12 @@ func errorMsg(errType string) string {
 	default:
 		return "-ERR unknown command '%s'\r\n"
 	}
+}
+
+func errorPingMsg() string {
+	return "Invalid argument(s)\r\n"
+}
+
+func errorPingToMuchArg() string {
+	return "-ERR wrong number of arguments for 'ping' command\r\n"
 }
