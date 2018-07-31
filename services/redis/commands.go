@@ -38,6 +38,7 @@ type cmd func(*redisService, []interface{}) (string, bool)
 
 var mapCmds = map[string]cmd{
 	"info": (*redisService).infoCmd,
+	"ping": (*redisService).pingCmd,
 	// ...
 }
 
@@ -78,5 +79,22 @@ func (s *redisService) infoCmd(args []interface{}) (string, bool) {
 		return fmt.Sprintf(lenMsg(), len(lineBreakMsg()), lineBreakMsg()), false
 	default:
 		return errorMsg("syntax"), false
+	}
+}
+
+func (s *redisService) pingCmd(args []interface{}) (string, bool) {
+	if len(args) == 0 {
+		return fmt.Sprintf(lenMsg(), len(s.pingDefaultMsg()), s.pingDefaultMsg()), false
+	} else if len(args) == 1 {
+		_word := args[0].(redisDatum)
+		word, success := _word.ToString()
+		if !success {
+			return "Expected string argument, got something else", false
+		}
+		return fmt.Sprintf(lenMsg(), len(s.pingSpecificMsg(word)), s.pingSpecificMsg(word)), false
+	} else if len(args) >= 2 {
+		return errorPingToMuchArg(), false
+	} else {
+		return errorPingMsg(), false
 	}
 }

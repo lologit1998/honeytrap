@@ -30,6 +30,19 @@
  */
 package redis
 
+/*Example config
+
+[service.redis]
+type="redis"
+version="4.0.6"
+os="Linux 4.9.49-moby x86_64"
+
+[[port]]
+port="tcp/6379"
+services=["redis"]
+
+*/
+
 import (
 	"context"
 	"fmt"
