@@ -29,7 +29,7 @@
 * must display the words "Powered by Honeytrap" and retain the original copyright notice.
  */
 
-package hadoop_datanode
+package hadoop
 
 import (
 	"bufio"
@@ -39,24 +39,18 @@ import (
 	"net/http"
 	"strings"
 
-	"github.com/honeytrap/honeytrap/event"
 	"github.com/honeytrap/honeytrap/pushers"
 	"github.com/honeytrap/honeytrap/services"
 )
 
-/*-------- DOCKER CONFIGURATION
-
-[service.hadoop_datanode]
-type="hadoop_datanode"
-
-[[port]]
-port="tcp/50075"
-services=["hadoop_datanode"]
-
------------------*/
-
 var (
-	_ = services.Register("hadoop_datanode", Hadoop)
+	hadoopRequestNameNode = map[string]func(*hadoopService) string{
+		"service=NameNode,name=NameNodeInfo":      (*hadoopService).showNameNode,
+		"service=NameNode,name=FSNamesystemState": (*hadoopService).showFSNamesystemState,
+	}
+	hadoopRequestDataNode = map[string]func(*hadoopService) string{
+		"service=DataNode,name=DataNodeInfo": (*hadoopService).showDataNode,
+	}
 )
 
 func Hadoop(options ...services.ServicerFunc) services.Servicer {
@@ -73,8 +67,8 @@ func Hadoop(options ...services.ServicerFunc) services.Servicer {
 }
 
 type hadoopServiceConfig struct {
-	Version string
-	Os      string
+	Version string `toml:"version"`
+	Os      string `toml:"os"`
 }
 
 type hadoopService struct {
@@ -87,31 +81,27 @@ func (s *hadoopService) SetChannel(ch pushers.Channel) {
 	s.ch = ch
 }
 
-func ShowRequest(reqMethod, reqUri string, s *hadoopService, conn net.Conn) {
-	if reqMethod == "GET" {
-		if strings.HasPrefix(reqUri, "/jmx?qry=") {
-			reqUri := strings.SplitAfter(reqUri, "/jmx?qry=")
-			if strings.HasPrefix(reqUri[1], "Hadoop:") {
-				trim_hadoop := strings.SplitAfter(reqUri[1], "Hadoop:")
-				request := strings.Split(trim_hadoop[1], ",")
-				if len(request) == 2 {
-					if request[0] == "service=DataNode" && request[1] == "name=DataNodeInfo" {
-						conn.Write([]byte(s.showDatanode()))
-					} else if request[0] == "service=NameNode" && request[1] == "name=FSNamesystemState" {
-						conn.Write([]byte(s.showFSNamesystemState()))
-					} else {
-						conn.Write([]byte(s.showNothing()))
-					}
-				} else {
-					conn.Write([]byte(s.showNothing()))
-				}
-			} else {
-				conn.Write([]byte(s.showEmpty()))
+func (s *hadoopService) ShowRequest(req *http.Request, hadoopRequest map[string]func(*hadoopService) string) string {
+	for i, _ := range req.Form {
+		if !strings.Contains(strings.Join(req.Form[i], ""), ":") {
+			return s.showEmpty()
+		}
+		request := strings.Split(strings.Join(req.Form[i], ""), ":")
+		switch request[0] {
+		case "Hadoop":
+			fn, ok := hadoopRequest[request[1]]
+			if !strings.Contains(request[1], ",") {
+				return s.showEmpty()
 			}
-		} else {
-			conn.Write([]byte(s.showWithoutQuerry()))
+			if !ok {
+				return s.showNothing()
+			}
+			return fn(s)
+		default:
+			return s.showNothing()
 		}
 	}
+	return ""
 }
 
 func (s *hadoopService) Handle(ctx context.Context, conn net.Conn) error {
@@ -124,19 +114,18 @@ func (s *hadoopService) Handle(ctx context.Context, conn net.Conn) error {
 		return err
 	}
 
-	ShowRequest(req.Method, req.RequestURI, s, conn)
+	err = req.ParseForm()
+	if err != nil {
+		return err
+	}
 
-	s.ch.Send(event.New(
-		services.EventOptions,
-		event.Category("hadoop_datanode"),
-		event.SourceAddr(conn.RemoteAddr()),
-		event.DestinationAddr(conn.LocalAddr()),
-		event.Custom("http.user-agent", req.UserAgent()),
-		event.Custom("http.method", req.Method),
-		event.Custom("http.proto", req.Proto),
-		event.Custom("http.host", req.Host),
-		event.Custom("http.url", req.URL.String()),
-	))
+	port := conn.LocalAddr().(*net.TCPAddr).Port
+
+	if port == 50070 {
+		return s.HandleNameNode(conn, req)
+	} else if port == 50075 {
+		return s.HandleDataNode(conn, req)
+	}
 
 	return nil
 }
